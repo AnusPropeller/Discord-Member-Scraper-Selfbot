@@ -1,6 +1,7 @@
 # Discord-Member-Scraper-Selfbot
 A simple discord server user/member scraper selfbot <br/>
-Saves the list of ids to a json file.
+Saves the list of ids to a json file. <br/>
+Used primarily for my other repo: Discord-Nuker-Selfbot.
 ## Features
 - Choose between scraping current members or all users that have been in the server.
 - Saves the list of user/member ids to a json file.
