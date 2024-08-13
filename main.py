@@ -152,15 +152,25 @@ async def scrape_users(guild: discord.Guild):
         if channel_curr.type is discord.ChannelType.category: continue
         if channel_curr.type is discord.ChannelType.forum:
             if channel_curr.permissions_for(guild.me).read_messages:
-                async for thread in channel_curr.archived_threads(limit=None):
-                    channels_to_scrape.append(thread)
+                try:
+                    async for thread in channel_curr.archived_threads(limit=None):
+                        channels_to_scrape.append(thread)
+                except discord.Forbidden:
+                    print("Failed to check channel threads: Forbidden.")
+                except discord.HTTPException:
+                    print("Failed to check channel threads: HTTPException")
                 for thread in channel_curr.threads:
                     channels_to_scrape.append(thread)
         elif channel_curr.type is discord.ChannelType.text:
             if channel_curr.permissions_for(guild.me).read_messages:
                 channels_to_scrape.append(channel_curr)
-                async for thread in channel_curr.archived_threads(limit=None):
-                    channels_to_scrape.append(thread)
+                try:
+                    async for thread in channel_curr.archived_threads(limit=None):
+                        channels_to_scrape.append(thread)
+                except discord.Forbidden:
+                    print("Failed to check channel threads: Forbidden.")
+                except discord.HTTPException:
+                    print("Failed to check channel threads: HTTPException")
                 for thread in channel_curr.threads:
                     channels_to_scrape.append(thread)
         elif channel_curr.type is discord.ChannelType.stage_voice or channel_curr.type is discord.ChannelType.voice:
