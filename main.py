@@ -65,6 +65,8 @@ else:
     print(f"Using depth {depth_question}")
     message_depth = int(depth_question)
 
+stop = False
+
 
 async def parse_input(user_input: str):
     prompt = user_input.strip()
@@ -93,6 +95,7 @@ async def on_ready():
 
 
 async def scrape_users(guild: discord.Guild):
+    global stop
     findlist(guild_ids=str(guild.id))
     member = await guild.fetch_member(bot.user.id)
     channels = None
@@ -198,7 +201,9 @@ async def scrape_users(guild: discord.Guild):
                     print("Found the last channel!")
             curr_channel = x.id
             if stop_early and (guild.member_count > 250):
-                if (guild.member_count - len(curr_member_list)) < 151: break
+                if (guild.member_count - len(curr_member_list)) < 151:
+                    stop = True
+                    break
             mes_depth = message_depth
             welcome_channel = False
             if x.id == welcome_channel_id:
@@ -218,7 +223,9 @@ async def scrape_users(guild: discord.Guild):
                     print(f"Failed to find the last message: HTTPException.")
                 async for message in x.history(limit=mes_depth, before=mess):
                     if stop_early and (guild.member_count > 250):
-                        if (guild.member_count - len(curr_member_list)) < 151: break
+                        if (guild.member_count - len(curr_member_list)) < 151:
+                            stop = True
+                            break
                     if message.author.id in curr_member_list and not (welcome_channel and message.author.bot): continue
                     if message.author.id in not_in_guild and not (welcome_channel and message.author.bot): continue
                     try:
@@ -271,6 +278,7 @@ async def scrape_users(guild: discord.Guild):
         else: print(f"Scraped {len(curr_member_list)} members, downloading to /{guild.id}.json.")
         print(f"Cache of server says that it has {guild.member_count} current members.")
         data['user-ids'] = curr_member_list
+        stop = True
         with open(f"{guild.id}.json", 'w') as f:
             json.dump(data, f)
     except Exception as e:
@@ -281,12 +289,21 @@ async def scrape_users(guild: discord.Guild):
         data['current-message'] = curr_message
         with open(f"{guild.id}.json", 'w') as f:
             json.dump(data, f)
+        if not stop:
+            print("Restarting script in 5 seconds.")
+            await asyncio.sleep(5)
+            await scrape_users(guild=guild)
     finally:
         data['user-ids'] = curr_member_list
         data['current-channel'] = curr_channel
         data['current-message'] = curr_message
         with open(f"{guild.id}.json", 'w') as f:
             json.dump(data, f)
+        if not stop:
+            print("Failed to complete.")
+            print("Restarting script in 5 seconds.")
+            await asyncio.sleep(5)
+            await scrape_users(guild=guild)
 
 
 user_token = input("Input user token: ")
