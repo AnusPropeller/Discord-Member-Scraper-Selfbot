@@ -178,42 +178,50 @@ async def scrape_users(guild: discord.Guild):
                 channels_to_scrape.append(channel_curr)
     print(f"channels to scrape: {len(channels_to_scrape)}")
     not_in_guild = []
-    for x in channels_to_scrape:
-        if stop_early and (guild.member_count > 250):
-            if (guild.member_count - len(curr_member_list)) < 151: break
-        mes_depth = message_depth
-        welcome_channel = False
-        if x.id == welcome_channel_id:
-            mes_depth = None
-            welcome_channel = True
-            print("Scraping welcome Channel!")
-        print(f"Scraping channel {x.name} for members.")
-        async for message in x.history(limit=mes_depth):
+    try:
+        for x in channels_to_scrape:
             if stop_early and (guild.member_count > 250):
                 if (guild.member_count - len(curr_member_list)) < 151: break
-            if message.author.id in curr_member_list and not (welcome_channel and message.author.bot): continue
-            if message.author.id in not_in_guild and not (welcome_channel and message.author.bot): continue
-            try:
-                if not message.author.bot:
-                    if only_members: await guild.fetch_member(message.author.id)
-                    print(f"New member added: {message.author.name} | Count: {len(curr_member_list) + 1}")
-                    curr_member_list.append(message.author.id)
-                if welcome_channel and message.author.bot:
-                    for mention in message.mentions:
-                        if only_members: await guild.fetch_member(mention.id)
-                        curr_member_list.append(mention.id)
-            except discord.NotFound:
-                not_in_guild.append(message.author.id)
-            except discord.Forbidden:
-                print("Failed to fetch user: Forbidden.")
-            except discord.HTTPException:
-                print("Failed to fetch user: HTTPException.")
-    if not only_members: print(f"Scraped {len(curr_member_list)} users, downloading to /{guild.id}.json.")
-    else: print(f"Scraped {len(curr_member_list)} members, downloading to /{guild.id}.json.")
-    print(f"Cache of server says that it has {guild.member_count} current members.")
-    data['user-ids'] = curr_member_list
-    with open(f"{guild.id}.json", 'w') as f:
-        json.dump(data, f)
+            mes_depth = message_depth
+            welcome_channel = False
+            if x.id == welcome_channel_id:
+                mes_depth = None
+                welcome_channel = True
+                print("Scraping welcome Channel!")
+            print(f"Scraping channel {x.name} for members.")
+            async for message in x.history(limit=mes_depth):
+                if stop_early and (guild.member_count > 250):
+                    if (guild.member_count - len(curr_member_list)) < 151: break
+                if message.author.id in curr_member_list and not (welcome_channel and message.author.bot): continue
+                if message.author.id in not_in_guild and not (welcome_channel and message.author.bot): continue
+                try:
+                    if not message.author.bot:
+                        if only_members: await guild.fetch_member(message.author.id)
+                        print(f"New member added: {message.author.name} | Count: {len(curr_member_list) + 1}")
+                        curr_member_list.append(message.author.id)
+                    if welcome_channel and message.author.bot:
+                        for mention in message.mentions:
+                            if only_members: await guild.fetch_member(mention.id)
+                            curr_member_list.append(mention.id)
+                except discord.NotFound:
+                    not_in_guild.append(message.author.id)
+                except discord.Forbidden:
+                    print("Failed to fetch user: Forbidden.")
+                except discord.HTTPException:
+                    print("Failed to fetch user: HTTPException.")
+        if not only_members: print(f"Scraped {len(curr_member_list)} users, downloading to /{guild.id}.json.")
+        else: print(f"Scraped {len(curr_member_list)} members, downloading to /{guild.id}.json.")
+        print(f"Cache of server says that it has {guild.member_count} current members.")
+        data['user-ids'] = curr_member_list
+        with open(f"{guild.id}.json", 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"Failed: {e}")
+        print(f"Saving current list to {guild.id}.json")
+        data['user-ids'] = curr_member_list
+        with open(f"{guild.id}.json", 'w') as f:
+            json.dump(data, f)
+
 
 user_token = input("Input user token: ")
 
