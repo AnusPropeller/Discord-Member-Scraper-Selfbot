@@ -8,6 +8,7 @@ Saves the list of ids to a json file.
 - Set a welcome channel to scrape bot's user-mentions for users at infinite message depth.
 - Choose whether to stop within 150 users of the current member count. (Servers with <250 users are able to be scraped normally)
   - The script will ignore this if the server has less than 250 members.
+- Tries to auto save progress in the case of a failure.
 ## Running the Script
 ### Zip File
 Download the zip file. <br/>
