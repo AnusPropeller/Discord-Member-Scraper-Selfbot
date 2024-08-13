@@ -196,12 +196,16 @@ async def scrape_users(guild: discord.Guild):
                 if message.author.id in not_in_guild and not (welcome_channel and message.author.bot): continue
                 try:
                     if not message.author.bot:
-                        if only_members: await guild.fetch_member(message.author.id)
+                        if only_members:
+                            await guild.fetch_member(message.author.id)
+                            await asyncio.sleep(0.45)
                         print(f"New member added: {message.author.name} | Count: {len(curr_member_list) + 1}")
                         curr_member_list.append(message.author.id)
                     if welcome_channel and message.author.bot:
                         for mention in message.mentions:
-                            if only_members: await guild.fetch_member(mention.id)
+                            if only_members:
+                                await guild.fetch_member(mention.id)
+                                await asyncio.sleep(0.45)
                             curr_member_list.append(mention.id)
                 except discord.NotFound:
                     not_in_guild.append(message.author.id)
