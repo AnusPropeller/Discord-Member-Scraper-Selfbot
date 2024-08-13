@@ -16,6 +16,8 @@ if sys.platform == 'win32':  # weird fix for a bug I ran into
 def findlist(guild_ids: str):
     data = {
         'user-ids': [],
+        'current-channel': None,
+        'current-message': None,
     }
     if not os.path.exists(f"{guild_ids}.json"):
         with open(f"{guild_ids}.json", 'w') as f:
@@ -23,9 +25,7 @@ def findlist(guild_ids: str):
             print(f"Created Config File {guild_ids}.json.")
     else:
         if os.path.getsize(f"{guild_ids}.json") > 0:
-            print("File exist, but is has values. Reformatting.")
-            with open(f"{guild_ids}.json", 'w') as f:
-                json.dump(data, f)
+            print("File exists.")
         else:
             print("File exist, but is empty. Refilling.")
             with open(f"{guild_ids}.json", 'w') as f:
@@ -81,7 +81,7 @@ async def parse_input(user_input: str):
         print("Failed to fetch the guild: HTTP Exception.")
         return
     if guild:
-        print(f"Nuking guild {guild.name}")
+        print(f"Scraping guild {guild.name}")
         await scrape_users(guild=guild)
 
 
@@ -123,6 +123,14 @@ async def scrape_users(guild: discord.Guild):
     with open(f"{guild.id}.json", 'r') as file:
         data = json.load(file)
     curr_member_list = data['user-ids']
+    curr_channel_id = data['current-channel']
+    curr_message_id = data['current-message']
+    print(f"Current channel id: {curr_channel_id}")
+    print(f"Current message_id: {curr_message_id}")
+    find_curr_channel = False
+    find_curr_message = False
+    if curr_channel_id: find_curr_channel = True
+    if curr_message_id: find_curr_message = True
     if len(good_channels_for_member_scraping) > 0:
         members = await guild.fetch_members(channels=good_channels_for_member_scraping, force_scraping=True,
                                             delay=.1, cache=True)
@@ -151,7 +159,7 @@ async def scrape_users(guild: discord.Guild):
     for channel_curr in tep:
         if channel_curr.type is discord.ChannelType.category: continue
         if channel_curr.type is discord.ChannelType.forum:
-            if channel_curr.permissions_for(guild.me).read_messages:
+            if channel_curr.permissions_for(member).read_messages:
                 try:
                     async for thread in channel_curr.archived_threads(limit=None):
                         channels_to_scrape.append(thread)
@@ -162,7 +170,7 @@ async def scrape_users(guild: discord.Guild):
                 for thread in channel_curr.threads:
                     channels_to_scrape.append(thread)
         elif channel_curr.type is discord.ChannelType.text:
-            if channel_curr.permissions_for(guild.me).read_messages:
+            if channel_curr.permissions_for(member).read_messages:
                 channels_to_scrape.append(channel_curr)
                 try:
                     async for thread in channel_curr.archived_threads(limit=None):
@@ -174,12 +182,21 @@ async def scrape_users(guild: discord.Guild):
                 for thread in channel_curr.threads:
                     channels_to_scrape.append(thread)
         elif channel_curr.type is discord.ChannelType.stage_voice or channel_curr.type is discord.ChannelType.voice:
-            if channel_curr.permissions_for(guild.me).read_messages:
+            if channel_curr.permissions_for(member).read_messages:
                 channels_to_scrape.append(channel_curr)
     print(f"channels to scrape: {len(channels_to_scrape)}")
     not_in_guild = []
+    curr_channel = None
+    curr_message = None
     try:
         for x in channels_to_scrape:
+            if find_curr_channel:
+                if x.id != curr_channel_id:
+                    continue
+                elif x.id == curr_channel_id:
+                    find_curr_channel = False
+                    print("Found the last channel!")
+            curr_channel = x.id
             if stop_early and (guild.member_count > 250):
                 if (guild.member_count - len(curr_member_list)) < 151: break
             mes_depth = message_depth
@@ -189,30 +206,67 @@ async def scrape_users(guild: discord.Guild):
                 welcome_channel = True
                 print("Scraping welcome Channel!")
             print(f"Scraping channel {x.name} for members.")
-            async for message in x.history(limit=mes_depth):
-                if stop_early and (guild.member_count > 250):
-                    if (guild.member_count - len(curr_member_list)) < 151: break
-                if message.author.id in curr_member_list and not (welcome_channel and message.author.bot): continue
-                if message.author.id in not_in_guild and not (welcome_channel and message.author.bot): continue
+            if find_curr_message:
+                mess = x.last_message_id
                 try:
-                    if not message.author.bot:
-                        if only_members:
-                            await guild.fetch_member(message.author.id)
-                            await asyncio.sleep(0.45)
-                        print(f"New member added: {message.author.name} | Count: {len(curr_member_list) + 1}")
-                        curr_member_list.append(message.author.id)
-                    if welcome_channel and message.author.bot:
-                        for mention in message.mentions:
-                            if only_members:
-                                await guild.fetch_member(mention.id)
-                                await asyncio.sleep(0.45)
-                            curr_member_list.append(mention.id)
+                    mess = await x.fetch_message(curr_message_id)
                 except discord.NotFound:
-                    not_in_guild.append(message.author.id)
+                    print(f"Couldn't find the last message: Not Found.")
                 except discord.Forbidden:
-                    print("Failed to fetch user: Forbidden.")
+                    print(f"Couldn't find the last message: Forbidden.")
                 except discord.HTTPException:
-                    print("Failed to fetch user: HTTPException.")
+                    print(f"Failed to find the last message: HTTPException.")
+                async for message in x.history(limit=mes_depth, before=mess):
+                    if stop_early and (guild.member_count > 250):
+                        if (guild.member_count - len(curr_member_list)) < 151: break
+                    if message.author.id in curr_member_list and not (welcome_channel and message.author.bot): continue
+                    if message.author.id in not_in_guild and not (welcome_channel and message.author.bot): continue
+                    try:
+                        curr_message = message.id
+                        if not message.author.bot:
+                            if only_members:
+                                await guild.fetch_member(message.author.id)
+                                await asyncio.sleep(0.45)
+                            print(f"New member added: {message.author.name} | Count: {len(curr_member_list) + 1}")
+                            curr_member_list.append(message.author.id)
+                        if welcome_channel and message.author.bot:
+                            for mention in message.mentions:
+                                if only_members:
+                                    await guild.fetch_member(mention.id)
+                                    await asyncio.sleep(0.45)
+                                curr_member_list.append(mention.id)
+                    except discord.NotFound:
+                        not_in_guild.append(message.author.id)
+                    except discord.Forbidden:
+                        print("Failed to fetch user: Forbidden.")
+                    except discord.HTTPException:
+                        print("Failed to fetch user: HTTPException.")
+            else:
+                async for message in x.history(limit=mes_depth):
+                    if stop_early and (guild.member_count > 250):
+                        if (guild.member_count - len(curr_member_list)) < 151: break
+                    if message.author.id in curr_member_list and not (welcome_channel and message.author.bot): continue
+                    if message.author.id in not_in_guild and not (welcome_channel and message.author.bot): continue
+                    try:
+                        curr_message = message.id
+                        if not message.author.bot:
+                            if only_members:
+                                await guild.fetch_member(message.author.id)
+                                await asyncio.sleep(0.45)
+                            print(f"New member added: {message.author.name} | Count: {len(curr_member_list) + 1}")
+                            curr_member_list.append(message.author.id)
+                        if welcome_channel and message.author.bot:
+                            for mention in message.mentions:
+                                if only_members:
+                                    await guild.fetch_member(mention.id)
+                                    await asyncio.sleep(0.45)
+                                curr_member_list.append(mention.id)
+                    except discord.NotFound:
+                        not_in_guild.append(message.author.id)
+                    except discord.Forbidden:
+                        print("Failed to fetch user: Forbidden.")
+                    except discord.HTTPException:
+                        print("Failed to fetch user: HTTPException.")
         if not only_members: print(f"Scraped {len(curr_member_list)} users, downloading to /{guild.id}.json.")
         else: print(f"Scraped {len(curr_member_list)} members, downloading to /{guild.id}.json.")
         print(f"Cache of server says that it has {guild.member_count} current members.")
@@ -223,6 +277,14 @@ async def scrape_users(guild: discord.Guild):
         print(f"Failed: {e}")
         print(f"Saving current list to {guild.id}.json")
         data['user-ids'] = curr_member_list
+        data['current-channel'] = curr_channel
+        data['current-message'] = curr_message
+        with open(f"{guild.id}.json", 'w') as f:
+            json.dump(data, f)
+    finally:
+        data['user-ids'] = curr_member_list
+        data['current-channel'] = curr_channel
+        data['current-message'] = curr_message
         with open(f"{guild.id}.json", 'w') as f:
             json.dump(data, f)
 
